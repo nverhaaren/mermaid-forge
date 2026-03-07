@@ -40,6 +40,11 @@ The entire application is structured as a single HTML file with logical sections
 - CSS custom properties for the design system; responsive breakpoint at 768px
 - GitHub sync uses SHA-based optimistic locking (PUT requires `sha` from last GET to avoid clobber)
 
+## Reference Documents
+
+- `mermaid-forge-overview.md` — project vision, target user, and competitive landscape analysis
+- `mermaid-forge-phase1-2-plan.md` — detailed implementation roadmap for Phase 1 (local tool) and Phase 2 (PWA + GitHub sync)
+
 ## Phase Status
 
 **Phase 1 (Local Tool)** — complete: IndexedDB, multi-diagram management, BYOK AI, import/export, auto-save, settings UI.
