@@ -312,6 +312,22 @@ html, body {
 }
 .snackbar.show { transform: translateX(-50%) translateY(0); }
 
+/* ─── Drag-over highlight ─── */
+#code-editor.drag-over { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* ─── Template grid ─── */
+.template-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 20px 20px;
+}
+.template-card {
+  padding: 14px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg-primary); cursor: pointer; transition: all 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.template-card:hover, .template-card:active { border-color: var(--accent); background: var(--accent-glow); }
+.template-card-name { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+.template-card-desc { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+
 /* ─── Desktop ─── */
 @media (min-width: 768px) {
   .tab-bar { display: none; }
@@ -400,10 +416,25 @@ html, body {
     <div class="settings-section">
       <div class="btn-row" style="margin-top:0;margin-bottom:14px">
         <button class="btn btn-primary" id="btn-new-diagram">+ New Diagram</button>
+        <button class="btn btn-outline" id="btn-templates">Templates</button>
         <button class="btn btn-outline" id="btn-pull-all" title="Pull all from GitHub">↓ Pull from GitHub</button>
       </div>
     </div>
     <div class="diagram-list" id="diagram-list"></div>
+  </div>
+</div>
+
+<!-- Templates Modal -->
+<div class="modal-overlay" id="templates-modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Templates</div>
+      <button class="modal-close" data-close="templates-modal">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="template-grid" id="template-grid"></div>
   </div>
 </div>
 
@@ -661,6 +692,91 @@ const DEFAULT_CODE = `flowchart TD
     C --> E[End]
     D --> E`;
 
+const TEMPLATES = [
+  { name: 'Flowchart', desc: 'Decision flow with branching paths', code: `flowchart TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Do something]
+    B -->|No| D[Do something else]
+    C --> E[End]
+    D --> E` },
+  { name: 'Sequence Diagram', desc: 'Request/response between services', code: `sequenceDiagram
+    participant Client
+    participant Server
+    participant Database
+    Client->>Server: GET /api/data
+    Server->>Database: Query
+    Database-->>Server: Results
+    Server-->>Client: 200 OK` },
+  { name: 'Class Diagram', desc: 'Object-oriented class structure', code: `classDiagram
+    class Animal {
+        +String name
+        +int age
+        +speak() void
+    }
+    class Dog {
+        +String breed
+        +fetch() void
+    }
+    Animal <|-- Dog` },
+  { name: 'ER Diagram', desc: 'Entity relationships for a database', code: `erDiagram
+    USER {
+        int id PK
+        string name
+        string email
+    }
+    ORDER {
+        int id PK
+        int userId FK
+        date createdAt
+    }
+    PRODUCT {
+        int id PK
+        string name
+        float price
+    }
+    USER ||--o{ ORDER : places
+    ORDER }o--|| PRODUCT : contains` },
+  { name: 'State Diagram', desc: 'States and transitions of a system', code: `stateDiagram-v2
+    [*] --> Idle
+    Idle --> Processing : submit
+    Processing --> Success : ok
+    Processing --> Error : fail
+    Error --> Idle : retry
+    Success --> [*]` },
+  { name: 'Gantt Chart', desc: 'Project timeline with tasks', code: `gantt
+    title Project Timeline
+    dateFormat YYYY-MM-DD
+    section Planning
+        Requirements   :done, req, 2024-01-01, 7d
+        Design         :done, des, after req, 5d
+    section Development
+        Backend        :active, be, after des, 14d
+        Frontend       :fe, after des, 10d
+    section Launch
+        Testing        :test, after be, 7d
+        Deploy         :after test, 2d` },
+  { name: 'Pie Chart', desc: 'Proportional data visualization', code: `pie title Browser Market Share
+    "Chrome" : 65
+    "Safari" : 19
+    "Firefox" : 4
+    "Edge" : 4
+    "Other" : 8` },
+  { name: 'Mindmap', desc: 'Ideas branching from a central topic', code: `mindmap
+  root((Project))
+    Planning
+      Requirements
+      Timeline
+      Budget
+    Development
+      Frontend
+      Backend
+      Database
+    Launch
+      Testing
+      Deployment
+      Monitoring` },
+];
+
 // ═══════════════════════════════════════════════
 // DOM Refs
 // ═══════════════════════════════════════════════
@@ -834,6 +950,27 @@ $('btn-new-diagram').addEventListener('click', async () => {
   showSnackbar('New diagram created');
 });
 
+$('btn-templates').addEventListener('click', () => {
+  const grid = $('template-grid');
+  grid.innerHTML = TEMPLATES.map((t, i) =>
+    `<div class="template-card" data-idx="${i}">
+      <div class="template-card-name">${esc(t.name)}</div>
+      <div class="template-card-desc">${esc(t.desc)}</div>
+    </div>`
+  ).join('');
+  grid.querySelectorAll('.template-card').forEach(card => {
+    card.addEventListener('click', async () => {
+      const t = TEMPLATES[+card.dataset.idx];
+      await saveCurrent();
+      await createAndLoad(t.name, t.code);
+      closeModal('templates-modal');
+      closeModal('diagrams-modal');
+      showSnackbar(`Template "${t.name}" loaded`);
+    });
+  });
+  openModal('templates-modal');
+});
+
 // ═══════════════════════════════════════════════
 // GitHub Sync
 // ═══════════════════════════════════════════════
@@ -946,6 +1083,21 @@ $('file-input').addEventListener('change', async (e) => {
   e.target.value = '';
 });
 
+// Drag-and-drop import on editor
+codeEditor.addEventListener('dragover', (e) => { e.preventDefault(); codeEditor.classList.add('drag-over'); });
+codeEditor.addEventListener('dragleave', () => codeEditor.classList.remove('drag-over'));
+codeEditor.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  codeEditor.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const text = await file.text();
+  const name = file.name.replace(/\.(mmd|mermaid|md|txt)$/i, '');
+  await saveCurrent();
+  await createAndLoad(name, text);
+  showSnackbar(`Imported "${name}"`);
+});
+
 function download(content, filename, mime) {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
@@ -959,29 +1111,41 @@ function download(content, filename, mime) {
 // ═══════════════════════════════════════════════
 const SYS = `You are a mermaid.js diagram expert. Generate ONLY valid mermaid.js diagram code. No explanation, no markdown fences, no commentary — raw mermaid code only. If existing code is provided with a modification request, output the full modified code.`;
 
+function aiError(status) {
+  if (status === 401) return 'Invalid API key — check Settings';
+  if (status === 429) return 'Rate limit hit — wait and try again';
+  if (status >= 500) return `Provider error (${status}) — try again`;
+  return `Request failed (${status})`;
+}
+
 async function callAI(prompt, existing) {
   let userContent = prompt;
   if (existing.trim()) userContent = `Existing diagram:\n\`\`\`\n${existing}\n\`\`\`\n\nRequest: ${prompt}`;
 
-  if (settings.provider === 'anthropic') {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+  try {
+    if (settings.provider === 'anthropic') {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': settings.apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        body: JSON.stringify({ model: settings.model || 'claude-sonnet-4-20250514', max_tokens: 4096, system: SYS, messages: [{ role: 'user', content: userContent }] }),
+      });
+      if (!res.ok) throw new Error(aiError(res.status));
+      const d = await res.json(); return d.content[0].text;
+    }
+    // OpenAI / OpenRouter
+    const base = settings.provider === 'openai' ? 'https://api.openai.com' : 'https://openrouter.ai/api';
+    const model = settings.model || (settings.provider === 'openai' ? 'gpt-4o' : 'anthropic/claude-sonnet-4');
+    const res = await fetch(`${base}/v1/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': settings.apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: settings.model || 'claude-sonnet-4-20250514', max_tokens: 4096, system: SYS, messages: [{ role: 'user', content: userContent }] }),
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.apiKey}` },
+      body: JSON.stringify({ model, messages: [{ role: 'system', content: SYS }, { role: 'user', content: userContent }], max_tokens: 4096 }),
     });
-    if (!res.ok) throw new Error(`API ${res.status}`);
-    const d = await res.json(); return d.content[0].text;
+    if (!res.ok) throw new Error(aiError(res.status));
+    const d = await res.json(); return d.choices[0].message.content;
+  } catch (err) {
+    if (err.name === 'TypeError') throw new Error('Network error — check your connection');
+    throw err;
   }
-  // OpenAI / OpenRouter
-  const base = settings.provider === 'openai' ? 'https://api.openai.com' : 'https://openrouter.ai/api';
-  const model = settings.model || (settings.provider === 'openai' ? 'gpt-4o' : 'anthropic/claude-sonnet-4');
-  const res = await fetch(`${base}/v1/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.apiKey}` },
-    body: JSON.stringify({ model, messages: [{ role: 'system', content: SYS }, { role: 'user', content: userContent }], max_tokens: 4096 }),
-  });
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  const d = await res.json(); return d.choices[0].message.content;
 }
 
 async function handleGenerate() {
@@ -1117,6 +1281,13 @@ async function boot() {
   try { await loadMermaidScript(); initMermaid(); } catch (e) {
     previewError.textContent = 'Could not load mermaid.js. Download this file and open it in your browser.';
     previewError.style.display = 'block';
+  }
+
+  // Migrate legacy single-diagram localStorage data
+  const legacyCode = localStorage.getItem('mf_code');
+  if (legacyCode) {
+    await dbPut(makeDiagram('Imported Diagram', legacyCode));
+    localStorage.removeItem('mf_code');
   }
 
   // Load or create initial diagram
