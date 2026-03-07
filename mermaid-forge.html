@@ -356,6 +356,9 @@ html, body {
     <button class="tb" id="btn-settings" title="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
     </button>
+    <button class="tb" id="btn-help" title="Help">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </button>
     <!-- Export dropdown -->
     <div class="dropdown" id="export-dropdown">
       <button class="dropdown-item" id="export-svg">Export as SVG</button>
@@ -435,6 +438,105 @@ html, body {
       </button>
     </div>
     <div class="template-grid" id="template-grid"></div>
+  </div>
+</div>
+
+<!-- Help Modal -->
+<div class="modal-overlay" id="help-modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Help</div>
+      <button class="modal-close" data-close="help-modal">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-label">Getting Started</div>
+      <div class="settings-note">
+        <p style="margin-bottom:8px">Type or paste <strong>Mermaid syntax</strong> in the <strong>Code</strong> editor. The diagram renders in the <strong>Preview</strong> pane automatically (toggle in Settings).</p>
+        <p style="margin-bottom:8px">On mobile, use the <strong>Code / Preview tabs</strong> to switch between panes. On desktop they appear side-by-side.</p>
+        <p style="margin-bottom:8px">Click the <strong>diagram name</strong> in the toolbar to rename it. Use the <strong>file icon</strong> to create, switch, or delete diagrams.</p>
+        <p>Use <strong>Tab</strong> to indent in the editor. <strong>Ctrl + Z</strong> / <strong>Cmd + Z</strong> to undo.</p>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-label">AI Generation</div>
+      <div class="settings-note">
+        <p style="margin-bottom:8px">Open <strong>Settings</strong> (gear icon) and paste an API key for one of the supported providers:</p>
+        <ul style="margin:0 0 8px 16px">
+          <li><strong>Anthropic</strong> — get a key at <a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a></li>
+          <li><strong>OpenAI</strong> — get a key at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a></li>
+          <li><strong>OpenRouter</strong> — get a key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai</a> (access many models with one key)</li>
+        </ul>
+        <p style="margin-bottom:8px">Type a description in the <strong>prompt bar</strong> at the bottom and press <strong>Enter</strong> (or the send button). The AI will generate or modify the current diagram.</p>
+        <p>If a request fails, your prompt stays in the bar — just fix the issue (e.g. add a key) and press Enter again.</p>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-label">Mermaid Syntax Quick Reference</div>
+      <div class="settings-note">
+        <p style="margin-bottom:10px">Start your diagram with the right keyword for each type:</p>
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:5px 8px 5px 0;color:var(--text-secondary);font-weight:600">Flowchart</td>
+            <td style="padding:5px 0"><code>flowchart TD</code></td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:5px 8px 5px 0;color:var(--text-secondary);font-weight:600">Sequence</td>
+            <td style="padding:5px 0"><code>sequenceDiagram</code></td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:5px 8px 5px 0;color:var(--text-secondary);font-weight:600">Class</td>
+            <td style="padding:5px 0"><code>classDiagram</code></td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:5px 8px 5px 0;color:var(--text-secondary);font-weight:600">ER</td>
+            <td style="padding:5px 0"><code>erDiagram</code></td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:5px 8px 5px 0;color:var(--text-secondary);font-weight:600">State</td>
+            <td style="padding:5px 0"><code>stateDiagram-v2</code></td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:5px 8px 5px 0;color:var(--text-secondary);font-weight:600">Gantt</td>
+            <td style="padding:5px 0"><code>gantt</code></td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:5px 8px 5px 0;color:var(--text-secondary);font-weight:600">Pie chart</td>
+            <td style="padding:5px 0"><code>pie title …</code></td>
+          </tr>
+          <tr>
+            <td style="padding:5px 8px 5px 0;color:var(--text-secondary);font-weight:600">Mindmap</td>
+            <td style="padding:5px 0"><code>mindmap</code></td>
+          </tr>
+        </table>
+        <p style="margin-top:10px">Use <strong>Templates</strong> (file icon → Templates) to start from a working example of any type.</p>
+        <p style="margin-top:8px">Full syntax reference: <a href="https://mermaid.js.org/intro/" target="_blank" rel="noopener">mermaid.js.org/intro/</a></p>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-label">Import &amp; Export</div>
+      <div class="settings-note">
+        <p style="margin-bottom:8px"><strong>Export:</strong> click the download icon → <em>Export as SVG</em> (image) or <em>Export as .mmd</em> (source).</p>
+        <p style="margin-bottom:8px"><strong>Import a file:</strong> click the download icon → <em>Import .mmd file</em> and pick a <code>.mmd</code>, <code>.mermaid</code>, <code>.md</code>, or <code>.txt</code> file.</p>
+        <p><strong>Drag &amp; drop:</strong> drop any of those file types directly onto the code editor to import it as a new diagram.</p>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-label">GitHub Sync</div>
+      <div class="settings-note">
+        <p style="margin-bottom:8px">In <strong>Settings</strong>, enter a GitHub <strong>fine-grained personal access token</strong> (Contents: Read + Write) and the target repository as <code>owner/repo</code>. Optionally set a path prefix like <code>diagrams/</code>.</p>
+        <p style="margin-bottom:8px">The <strong>sync icon</strong> in the toolbar pushes the current diagram to GitHub as a <code>.mmd</code> file.</p>
+        <p><strong>Pull from GitHub</strong> (in the Diagrams panel) pulls all <code>.mmd</code> files from the repo into your local diagram list.</p>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -1187,6 +1289,7 @@ document.querySelectorAll('.tab').forEach(tab => {
 // Settings
 // ═══════════════════════════════════════════════
 $('btn-settings').addEventListener('click', () => { openModal('settings-modal'); loadSettingsUI(); });
+$('btn-help').addEventListener('click', () => openModal('help-modal'));
 
 function loadSettingsUI() {
   $('ai-provider').value = settings.provider;
