@@ -40,6 +40,26 @@ The entire application is structured as a single HTML file with logical sections
 - CSS custom properties for the design system; responsive breakpoint at 768px
 - GitHub sync uses SHA-based optimistic locking (PUT requires `sha` from last GET to avoid clobber)
 
+## Accessing GitHub PRs
+
+`gh` is not available. Use the GitHub REST API directly with `curl`. The git remote username (`local_proxy`) also authenticates against the GitHub API:
+
+```bash
+# List open PRs
+curl -s -u "local_proxy:" "https://api.github.com/repos/nverhaaren/mermaid-forge/pulls?state=open"
+
+# PR review comments (the reviewer's overall summary)
+curl -s -u "local_proxy:" "https://api.github.com/repos/nverhaaren/mermaid-forge/pulls/1/reviews"
+
+# Inline code comments on a PR
+curl -s -u "local_proxy:" "https://api.github.com/repos/nverhaaren/mermaid-forge/pulls/1/comments"
+
+# General issue-style comments on a PR
+curl -s -u "local_proxy:" "https://api.github.com/repos/nverhaaren/mermaid-forge/issues/1/comments"
+```
+
+Pipe through `python3 -m json.tool` for readable output, or filter with `python3 -c "import sys,json; ..."`.
+
 ## Reference Documents
 
 - `mermaid-forge-overview.md` — project vision, target user, and competitive landscape analysis
