@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Mermaid Forge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+window.mermaidReady = false;
+function loadMermaidScript() {
+  return new Promise((resolve, reject) => {
+    if (window.mermaid) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.4.1/mermaid.min.js';
+    s.onload = resolve;
+    s.onerror = () => {
+      const s2 = document.createElement('script');
+      s2.src = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
+      s2.onload = resolve;
+      s2.onerror = reject;
+      document.head.appendChild(s2);
+    };
+    document.head.appendChild(s);
+  });
+}
+</script>
+<style>
+:root {
+  --bg-primary: #0a0e17;
+  --bg-secondary: #111827;
+  --bg-tertiary: #1a2235;
+  --bg-panel: #141c2e;
+  --border: #1e2d45;
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --accent-glow: rgba(59, 130, 246, 0.15);
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  height: 100%; overflow: hidden;
+  background: var(--bg-primary); color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif; -webkit-text-size-adjust: 100%;
+}
+#app { display: flex; flex-direction: column; height: 100dvh; height: 100vh; }
+
+/* ─── Toolbar ─── */
+.toolbar {
+  display: flex; align-items: center; gap: 4px;
+  padding: 6px 10px; background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border); min-height: 48px; flex-shrink: 0; z-index: 20;
+}
+.toolbar-brand {
+  font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 14px;
+  color: var(--accent); letter-spacing: -0.5px; margin-right: auto; white-space: nowrap;
+}
+.toolbar-brand span { color: var(--text-muted); font-weight: 400; }
+.tb {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border: none; border-radius: 8px;
+  background: transparent; color: var(--text-secondary); cursor: pointer;
+  transition: all 0.15s; flex-shrink: 0; -webkit-tap-highlight-color: transparent;
+}
+.tb:hover, .tb:active { background: var(--bg-tertiary); color: var(--text-primary); }
+.tb.active { background: var(--accent-glow); color: var(--accent); }
+.tb svg { width: 20px; height: 20px; }
+.tb-sep { width: 1px; height: 24px; background: var(--border); margin: 0 2px; flex-shrink: 0; }
+
+/* ─── Diagram name (editable) ─── */
+.diagram-name {
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  color: var(--text-primary); background: transparent; border: 1px solid transparent;
+  border-radius: 6px; padding: 4px 8px; outline: none; min-width: 60px; max-width: 140px;
+  transition: border-color 0.15s; direction: ltr !important; text-align: left !important;
+}
+.diagram-name:focus { border-color: var(--accent); background: var(--bg-primary); }
+
+/* ─── Tabs ─── */
+.tab-bar {
+  display: flex; background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border); flex-shrink: 0; z-index: 15;
+}
+.tab {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  height: 44px; border: none; background: transparent; color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; position: relative; transition: color 0.15s;
+  -webkit-tap-highlight-color: transparent; letter-spacing: 0.3px; text-transform: uppercase;
+}
+.tab svg { width: 16px; height: 16px; }
+.tab.active { color: var(--accent); }
+.tab.active::after {
+  content: ''; position: absolute; bottom: 0; left: 16px; right: 16px;
+  height: 2px; background: var(--accent); border-radius: 2px 2px 0 0;
+}
+
+/* ─── Main ─── */
+.main-content { flex: 1; position: relative; overflow: hidden; min-height: 0; }
+.panel { position: absolute; inset: 0; display: none; flex-direction: column; overflow: hidden; }
+.panel.active { display: flex; }
+
+/* ─── Editor ─── */
+#editor-area { flex: 1; padding: 0; overflow: hidden; position: relative; }
+#code-editor {
+  width: 100%; height: 100%; background: var(--bg-primary); color: var(--text-primary);
+  border: none; resize: none; padding: 14px;
+  font-family: 'JetBrains Mono', monospace; font-size: 13.5px; line-height: 1.7; tab-size: 2;
+  outline: none; direction: ltr !important; unicode-bidi: plaintext; text-align: left !important;
+  -webkit-overflow-scrolling: touch;
+}
+#code-editor::placeholder { color: var(--text-muted); }
+
+/* ─── Preview ─── */
+#preview-container {
+  flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; background: #fff;
+  display: flex; align-items: flex-start; justify-content: center; padding: 16px;
+  touch-action: pan-x pan-y pinch-zoom;
+}
+#preview-container .mermaid-output { max-width: 100%; overflow: visible; }
+#preview-container .mermaid-output svg { max-width: 100%; height: auto; }
+#preview-error {
+  display: none; padding: 16px; margin: 12px;
+  background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 10px; color: var(--danger);
+  font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.6; word-break: break-word;
+}
+
+/* ─── AI Prompt ─── */
+.prompt-bar {
+  display: flex; align-items: flex-end; gap: 8px; padding: 8px 10px;
+  background: var(--bg-secondary); border-top: 1px solid var(--border); flex-shrink: 0; z-index: 15;
+}
+.prompt-input-wrap { flex: 1; }
+#prompt-input {
+  width: 100%; min-height: 40px; max-height: 120px; padding: 9px 14px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--bg-primary);
+  color: var(--text-primary); font-family: 'DM Sans', sans-serif; font-size: 14px;
+  line-height: 1.5; resize: none; outline: none;
+  direction: ltr !important; unicode-bidi: plaintext; text-align: left !important;
+  transition: border-color 0.15s;
+}
+#prompt-input:focus { border-color: var(--accent); }
+#prompt-input::placeholder { color: var(--text-muted); }
+.send-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border: none; border-radius: 12px;
+  background: var(--accent); color: #fff; cursor: pointer; flex-shrink: 0;
+  transition: background 0.15s, transform 0.1s; -webkit-tap-highlight-color: transparent;
+}
+.send-btn:active { transform: scale(0.94); }
+.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.send-btn svg { width: 20px; height: 20px; }
+
+.ai-status {
+  display: none; align-items: center; gap: 8px; padding: 8px 14px;
+  background: var(--bg-tertiary); border-top: 1px solid var(--border);
+  font-size: 13px; color: var(--text-secondary);
+}
+.ai-status.visible { display: flex; }
+.spinner {
+  width: 16px; height: 16px; border: 2px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── Modal (shared) ─── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px); z-index: 100; align-items: flex-end; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal-sheet {
+  width: 100%; max-width: 480px; max-height: 88dvh; max-height: 88vh;
+  background: var(--bg-secondary); border-radius: 20px 20px 0 0;
+  overflow-y: auto; -webkit-overflow-scrolling: touch; animation: slideUp 0.25s ease-out;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modal-handle {
+  display: flex; justify-content: center; padding: 10px;
+  position: sticky; top: 0; background: var(--bg-secondary); z-index: 1;
+}
+.modal-handle::after {
+  content: ''; width: 36px; height: 4px; border-radius: 4px;
+  background: var(--text-muted); opacity: 0.4;
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between; padding: 0 20px 12px;
+}
+.modal-title { font-size: 18px; font-weight: 700; }
+.modal-close {
+  width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+  border: none; border-radius: 8px; background: var(--bg-tertiary); color: var(--text-secondary); cursor: pointer;
+}
+.settings-section { padding: 0 20px 20px; }
+.settings-label {
+  font-size: 11px; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;
+}
+.settings-field { margin-bottom: 14px; }
+.settings-field label {
+  display: block; font-size: 13px; font-weight: 600;
+  color: var(--text-secondary); margin-bottom: 6px;
+}
+.settings-field select, .settings-field input[type="password"], .settings-field input[type="text"] {
+  width: 100%; height: 42px; padding: 0 12px; border: 1px solid var(--border);
+  border-radius: 10px; background: var(--bg-primary); color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none;
+  transition: border-color 0.15s; -webkit-appearance: none;
+  direction: ltr !important; text-align: left !important;
+}
+.settings-field select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px;
+}
+.settings-field input[type="password"] { font-family: 'JetBrains Mono', monospace; font-size: 13px; letter-spacing: 1px; }
+.settings-field input:focus, .settings-field select:focus { border-color: var(--accent); }
+.key-status {
+  display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 12px; color: var(--text-muted);
+}
+.key-status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); }
+.key-status.configured .dot { background: var(--success); }
+.key-status.configured { color: var(--success); }
+.settings-note {
+  font-size: 12px; color: var(--text-muted); line-height: 1.6; padding: 12px;
+  background: var(--bg-primary); border-radius: 10px; border: 1px solid var(--border);
+}
+.settings-note code {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  background: var(--bg-tertiary); padding: 1px 5px; border-radius: 4px; color: var(--accent);
+}
+.settings-note ol { margin: 8px 0 4px 18px; }
+.settings-note ol li { margin-bottom: 4px; }
+.settings-note a { color: var(--accent); text-decoration: underline; }
+
+/* ─── Buttons in settings ─── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 38px; padding: 0 16px; border: none; border-radius: 10px;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s; -webkit-tap-highlight-color: transparent;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-outline { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+.btn-outline:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.btn-danger { background: rgba(239,68,68,0.1); color: var(--danger); border: 1px solid rgba(239,68,68,0.2); }
+.btn-danger:hover { background: rgba(239,68,68,0.2); }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+/* ─── Diagram list ─── */
+.diagram-list { padding: 0; }
+.diagram-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 20px; border-bottom: 1px solid var(--border); cursor: pointer;
+  transition: background 0.1s; -webkit-tap-highlight-color: transparent;
+}
+.diagram-item:active, .diagram-item:hover { background: var(--bg-tertiary); }
+.diagram-item.active { background: var(--accent-glow); }
+.diagram-item-info { flex: 1; min-width: 0; }
+.diagram-item-name {
+  font-size: 14px; font-weight: 600; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.diagram-item-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.diagram-item-sync {
+  font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px;
+  text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0;
+}
+.sync-local { background: var(--bg-tertiary); color: var(--text-muted); }
+.sync-synced { background: rgba(16,185,129,0.1); color: var(--success); }
+.sync-modified { background: rgba(245,158,11,0.1); color: var(--warning); }
+.diagram-item-delete {
+  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  border: none; border-radius: 6px; background: transparent; color: var(--text-muted);
+  cursor: pointer; flex-shrink: 0; transition: all 0.1s;
+}
+.diagram-item-delete:hover { background: rgba(239,68,68,0.1); color: var(--danger); }
+
+/* ─── Dropdowns ─── */
+.dropdown {
+  display: none; position: absolute; top: 100%; right: 10px; width: 200px;
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4); z-index: 30; overflow: hidden;
+}
+.dropdown.open { display: block; }
+.dropdown-item {
+  display: block; width: 100%; padding: 11px 16px; border: none; background: transparent;
+  color: var(--text-secondary); font-family: 'DM Sans', sans-serif; font-size: 13px;
+  font-weight: 500; text-align: left; cursor: pointer; transition: background 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.dropdown-item:hover, .dropdown-item:active { background: var(--bg-tertiary); color: var(--text-primary); }
+.dropdown-divider { height: 1px; background: var(--border); margin: 0; }
+
+/* ─── Snackbar ─── */
+.snackbar {
+  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(100px);
+  padding: 10px 20px; background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 12px; color: var(--text-primary); font-size: 13px; font-weight: 500;
+  z-index: 200; transition: transform 0.25s ease; pointer-events: none; white-space: nowrap;
+  max-width: 90vw; overflow: hidden; text-overflow: ellipsis;
+}
+.snackbar.show { transform: translateX(-50%) translateY(0); }
+
+/* ─── Desktop ─── */
+@media (min-width: 768px) {
+  .tab-bar { display: none; }
+  .main-content { display: flex; flex-direction: row; }
+  .panel { position: relative; display: flex !important; flex: 1; min-width: 0; }
+  #panel-editor { border-right: 1px solid var(--border); }
+  #panel-preview { flex: 1.2; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="toolbar">
+    <div class="toolbar-brand">⬡ Mermaid<span>Forge</span></div>
+    <input class="diagram-name" id="diagram-name" value="Untitled" spellcheck="false" maxlength="60">
+    <div class="tb-sep"></div>
+    <button class="tb" id="btn-diagrams" title="My Diagrams">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    </button>
+    <button class="tb" id="btn-export" title="Export">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    </button>
+    <button class="tb" id="btn-sync" title="Sync to GitHub">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+    </button>
+    <button class="tb" id="btn-settings" title="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+    <!-- Export dropdown -->
+    <div class="dropdown" id="export-dropdown">
+      <button class="dropdown-item" id="export-svg">Export as SVG</button>
+      <button class="dropdown-item" id="export-mmd">Export as .mmd</button>
+      <div class="dropdown-divider"></div>
+      <button class="dropdown-item" id="import-mmd">Import .mmd file</button>
+    </div>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab active" data-panel="editor">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      Code
+    </button>
+    <button class="tab" data-panel="preview">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      Preview
+    </button>
+  </div>
+
+  <div class="main-content">
+    <div class="panel active" id="panel-editor">
+      <div id="editor-area">
+        <textarea id="code-editor" spellcheck="false" placeholder="Type mermaid syntax here..."></textarea>
+      </div>
+      <div class="ai-status" id="ai-status">
+        <div class="spinner"></div>
+        <span id="ai-status-text">Generating...</span>
+      </div>
+      <div class="prompt-bar">
+        <div class="prompt-input-wrap">
+          <textarea id="prompt-input" rows="1" placeholder="Describe a diagram with AI..."></textarea>
+        </div>
+        <button class="send-btn" id="btn-send" title="Generate">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="panel" id="panel-preview">
+      <div id="preview-container">
+        <div class="mermaid-output" id="mermaid-output"></div>
+      </div>
+      <div id="preview-error"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Diagrams Modal -->
+<div class="modal-overlay" id="diagrams-modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Diagrams</div>
+      <button class="modal-close" data-close="diagrams-modal">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="settings-section">
+      <div class="btn-row" style="margin-top:0;margin-bottom:14px">
+        <button class="btn btn-primary" id="btn-new-diagram">+ New Diagram</button>
+        <button class="btn btn-outline" id="btn-pull-all" title="Pull all from GitHub">↓ Pull from GitHub</button>
+      </div>
+    </div>
+    <div class="diagram-list" id="diagram-list"></div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Settings</div>
+      <button class="modal-close" data-close="settings-modal">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="settings-section">
+      <div class="settings-label">AI Provider</div>
+      <div class="settings-field">
+        <label for="ai-provider">Provider</label>
+        <select id="ai-provider">
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="openai">OpenAI (GPT)</option>
+          <option value="openrouter">OpenRouter</option>
+        </select>
+      </div>
+      <div class="settings-field">
+        <label for="ai-model">Model</label>
+        <select id="ai-model"></select>
+      </div>
+      <div class="settings-field">
+        <label for="api-key">AI API Key</label>
+        <input type="password" id="api-key" placeholder="sk-...">
+        <div class="key-status" id="key-status">
+          <span class="dot"></span> <span class="key-text">No key configured</span>
+        </div>
+      </div>
+      <div class="settings-note">
+        Your API key is stored in this browser only and sent directly to the provider. It never touches any third-party server.
+      </div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-label">GitHub Sync</div>
+      <div class="settings-field">
+        <label for="gh-token">GitHub Personal Access Token</label>
+        <input type="password" id="gh-token" placeholder="github_pat_...">
+        <div class="key-status" id="gh-status">
+          <span class="dot"></span> <span class="key-text">No token configured</span>
+        </div>
+      </div>
+      <div class="settings-field">
+        <label for="gh-repo">Repository</label>
+        <input type="text" id="gh-repo" placeholder="username/mermaid-diagrams">
+      </div>
+      <div class="settings-field">
+        <label for="gh-path">Path prefix (optional)</label>
+        <input type="text" id="gh-path" placeholder="diagrams/">
+      </div>
+      <div class="settings-note">
+        <strong>Creating a fine-grained token with minimal permissions:</strong>
+        <ol>
+          <li>Go to <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com → Settings → Developer settings → Fine-grained tokens → Generate new token</a></li>
+          <li>Set <strong>Token name</strong> to something like <code>mermaid-forge</code></li>
+          <li>Set <strong>Expiration</strong> to your preference (e.g. 90 days)</li>
+          <li>Under <strong>Repository access</strong>, select <strong>"Only select repositories"</strong> and pick your diagrams repo</li>
+          <li>Under <strong>Permissions → Repository permissions</strong>, set <strong>Contents</strong> to <code>Read and write</code>. Leave everything else at "No access"</li>
+          <li>Click <strong>Generate token</strong> and paste it above</li>
+        </ol>
+        This grants the absolute minimum: read/write files in one specific repo. No access to other repos, issues, PRs, settings, or anything else.
+      </div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-label">Editor</div>
+      <div class="settings-field">
+        <label for="mermaid-theme">Diagram Theme</label>
+        <select id="mermaid-theme">
+          <option value="default">Default</option>
+          <option value="dark">Dark</option>
+          <option value="forest">Forest</option>
+          <option value="neutral">Neutral</option>
+          <option value="base">Base</option>
+        </select>
+      </div>
+      <div class="settings-field">
+        <label for="auto-render">Auto-render</label>
+        <select id="auto-render">
+          <option value="true">On (render as you type)</option>
+          <option value="false">Off (manual)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden file input for import -->
+<input type="file" id="file-input" accept=".mmd,.mermaid,.md,.txt" style="display:none">
+
+<div class="snackbar" id="snackbar"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+// IndexedDB Layer
+// ═══════════════════════════════════════════════
+const DB_NAME = 'mermaid-forge';
+const DB_VERSION = 1;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('diagrams')) {
+        const store = db.createObjectStore('diagrams', { keyPath: 'id' });
+        store.createIndex('updatedAt', 'updatedAt');
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbGetAll() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('diagrams', 'readonly');
+    const req = tx.objectStore('diagrams').index('updatedAt').getAll();
+    req.onsuccess = () => resolve(req.result.reverse());
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbGet(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('diagrams', 'readonly');
+    const req = tx.objectStore('diagrams').get(id);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbPut(diagram) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('diagrams', 'readwrite');
+    tx.objectStore('diagrams').put(diagram);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function dbDelete(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('diagrams', 'readwrite');
+    tx.objectStore('diagrams').delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// ═══════════════════════════════════════════════
+// GitHub API Layer
+// ═══════════════════════════════════════════════
+function ghHeaders() {
+  return {
+    'Authorization': `Bearer ${settings.ghToken}`,
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+}
+
+function ghFilePath(name) {
+  const prefix = settings.ghPath ? settings.ghPath.replace(/\/+$/, '') + '/' : '';
+  const safeName = name.replace(/[^a-zA-Z0-9_\-. ]/g, '_');
+  return `${prefix}${safeName}.mmd`;
+}
+
+async function ghGetFile(path) {
+  const res = await fetch(`https://api.github.com/repos/${settings.ghRepo}/contents/${encodeURIComponent(path)}`, {
+    headers: ghHeaders(),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`GitHub API ${res.status}: ${res.statusText}`);
+  return res.json();
+}
+
+async function ghPutFile(path, content, sha) {
+  const body = {
+    message: sha ? `Update ${path}` : `Add ${path}`,
+    content: btoa(unescape(encodeURIComponent(content))),
+  };
+  if (sha) body.sha = sha;
+  const res = await fetch(`https://api.github.com/repos/${settings.ghRepo}/contents/${encodeURIComponent(path)}`, {
+    method: 'PUT',
+    headers: { ...ghHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`GitHub push failed (${res.status}): ${err.message || res.statusText}`);
+  }
+  return res.json();
+}
+
+async function ghListFiles() {
+  const prefix = settings.ghPath ? settings.ghPath.replace(/\/+$/, '') : '';
+  const url = prefix
+    ? `https://api.github.com/repos/${settings.ghRepo}/contents/${encodeURIComponent(prefix)}`
+    : `https://api.github.com/repos/${settings.ghRepo}/contents/`;
+  const res = await fetch(url, { headers: ghHeaders() });
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+  const items = await res.json();
+  return Array.isArray(items) ? items.filter(f => f.name.endsWith('.mmd')) : [];
+}
+
+// ═══════════════════════════════════════════════
+// App State
+// ═══════════════════════════════════════════════
+const settings = {
+  provider: localStorage.getItem('mf_provider') || 'anthropic',
+  model: localStorage.getItem('mf_model') || '',
+  apiKey: localStorage.getItem('mf_apiKey') || '',
+  theme: localStorage.getItem('mf_theme') || 'default',
+  autoRender: localStorage.getItem('mf_autoRender') !== 'false',
+  ghToken: localStorage.getItem('mf_ghToken') || '',
+  ghRepo: localStorage.getItem('mf_ghRepo') || '',
+  ghPath: localStorage.getItem('mf_ghPath') || '',
+};
+
+let currentDiagramId = localStorage.getItem('mf_currentId') || null;
+let currentDiagram = null; // loaded from IDB
+
+const MODELS = {
+  anthropic: [
+    { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
+    { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' },
+    { id: 'claude-opus-4-5-20250527', name: 'Claude Opus 4.5' },
+  ],
+  openai: [
+    { id: 'gpt-4o', name: 'GPT-4o' },
+    { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
+    { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini' },
+  ],
+  openrouter: [
+    { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4' },
+    { id: 'openai/gpt-4o', name: 'GPT-4o' },
+    { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+    { id: 'deepseek/deepseek-chat-v3', name: 'DeepSeek V3' },
+  ],
+};
+
+const DEFAULT_CODE = `flowchart TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Action 1]
+    B -->|No| D[Action 2]
+    C --> E[End]
+    D --> E`;
+
+// ═══════════════════════════════════════════════
+// DOM Refs
+// ═══════════════════════════════════════════════
+const $ = (s) => document.getElementById(s);
+const codeEditor = $('code-editor');
+const promptInput = $('prompt-input');
+const mermaidOutput = $('mermaid-output');
+const previewError = $('preview-error');
+const diagramNameInput = $('diagram-name');
+
+// ═══════════════════════════════════════════════
+// Mermaid Rendering
+// ═══════════════════════════════════════════════
+let renderTimeout, renderCounter = 0;
+
+function initMermaid() {
+  if (!window.mermaid) return;
+  mermaid.initialize({ startOnLoad: false, theme: settings.theme, securityLevel: 'loose', fontFamily: 'DM Sans, sans-serif' });
+  window.mermaidReady = true;
+}
+
+async function renderDiagram() {
+  if (!window.mermaidReady) {
+    previewError.textContent = 'Mermaid.js loading… If blocked, download this file and open in your browser.';
+    previewError.style.display = 'block';
+    return;
+  }
+  const code = codeEditor.value.trim();
+  if (!code) { mermaidOutput.innerHTML = ''; previewError.style.display = 'none'; return; }
+  try {
+    renderCounter++;
+    const { svg } = await mermaid.render(`m-${renderCounter}`, code);
+    mermaidOutput.innerHTML = svg;
+    previewError.style.display = 'none';
+  } catch (err) {
+    previewError.textContent = err.message || 'Invalid syntax';
+    previewError.style.display = 'block';
+    const bad = document.getElementById(`m-${renderCounter}`);
+    if (bad) bad.remove();
+  }
+}
+
+function scheduleRender() {
+  clearTimeout(renderTimeout);
+  renderTimeout = setTimeout(renderDiagram, 500);
+}
+
+// ═══════════════════════════════════════════════
+// Diagram CRUD
+// ═══════════════════════════════════════════════
+function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+function makeDiagram(name, code) {
+  const now = Date.now();
+  return { id: newId(), name: name || 'Untitled', code: code || DEFAULT_CODE, createdAt: now, updatedAt: now, ghPath: null, ghSha: null };
+}
+
+async function loadDiagram(id) {
+  const d = await dbGet(id);
+  if (!d) return false;
+  currentDiagram = d;
+  currentDiagramId = d.id;
+  localStorage.setItem('mf_currentId', d.id);
+  codeEditor.value = d.code;
+  diagramNameInput.value = d.name;
+  scheduleRender();
+  return true;
+}
+
+async function saveCurrent() {
+  if (!currentDiagram) return;
+  currentDiagram.code = codeEditor.value;
+  currentDiagram.name = diagramNameInput.value.trim() || 'Untitled';
+  currentDiagram.updatedAt = Date.now();
+  await dbPut(currentDiagram);
+}
+
+async function createAndLoad(name, code) {
+  const d = makeDiagram(name, code);
+  await dbPut(d);
+  await loadDiagram(d.id);
+  return d;
+}
+
+// Auto-save on edit
+let saveTimeout;
+codeEditor.addEventListener('input', () => {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(saveCurrent, 800);
+  if (settings.autoRender) scheduleRender();
+});
+
+diagramNameInput.addEventListener('input', () => {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(saveCurrent, 800);
+});
+
+codeEditor.addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = codeEditor.selectionStart, end = codeEditor.selectionEnd;
+    codeEditor.value = codeEditor.value.substring(0, s) + '  ' + codeEditor.value.substring(end);
+    codeEditor.selectionStart = codeEditor.selectionEnd = s + 2;
+    codeEditor.dispatchEvent(new Event('input'));
+  }
+});
+
+// ═══════════════════════════════════════════════
+// Diagrams Modal
+// ═══════════════════════════════════════════════
+async function renderDiagramList() {
+  const list = $('diagram-list');
+  const diagrams = await dbGetAll();
+  if (!diagrams.length) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">No diagrams yet. Create one to get started.</div>';
+    return;
+  }
+  list.innerHTML = diagrams.map(d => {
+    const active = d.id === currentDiagramId ? ' active' : '';
+    const ago = timeAgo(d.updatedAt);
+    let syncClass = 'sync-local', syncLabel = 'local';
+    if (d.ghSha) { syncClass = 'sync-synced'; syncLabel = 'synced'; }
+    // If ghPath exists but code may have changed since last push, we can't easily detect here — keep synced
+    return `<div class="diagram-item${active}" data-id="${d.id}">
+      <div class="diagram-item-info">
+        <div class="diagram-item-name">${esc(d.name)}</div>
+        <div class="diagram-item-meta">${ago}</div>
+      </div>
+      <span class="diagram-item-sync ${syncClass}">${syncLabel}</span>
+      <button class="diagram-item-delete" data-delete="${d.id}" title="Delete">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.diagram-item').forEach(el => {
+    el.addEventListener('click', async (e) => {
+      if (e.target.closest('.diagram-item-delete')) return;
+      await saveCurrent();
+      await loadDiagram(el.dataset.id);
+      closeModal('diagrams-modal');
+    });
+  });
+
+  list.querySelectorAll('.diagram-item-delete').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.delete;
+      if (!confirm('Delete this diagram?')) return;
+      await dbDelete(id);
+      if (id === currentDiagramId) {
+        const remaining = await dbGetAll();
+        if (remaining.length) await loadDiagram(remaining[0].id);
+        else await createAndLoad('Untitled', DEFAULT_CODE);
+      }
+      renderDiagramList();
+    });
+  });
+}
+
+$('btn-diagrams').addEventListener('click', async () => {
+  await saveCurrent();
+  openModal('diagrams-modal');
+  renderDiagramList();
+});
+
+$('btn-new-diagram').addEventListener('click', async () => {
+  await saveCurrent();
+  await createAndLoad('Untitled', DEFAULT_CODE);
+  closeModal('diagrams-modal');
+  showSnackbar('New diagram created');
+});
+
+// ═══════════════════════════════════════════════
+// GitHub Sync
+// ═══════════════════════════════════════════════
+$('btn-sync').addEventListener('click', async () => {
+  if (!settings.ghToken || !settings.ghRepo) {
+    showSnackbar('Configure GitHub token and repo in Settings first');
+    return;
+  }
+  await saveCurrent();
+  if (!currentDiagram) return;
+
+  showSnackbar('Pushing to GitHub...');
+  try {
+    const path = ghFilePath(currentDiagram.name);
+    // Check if file exists to get SHA
+    const existing = await ghGetFile(path);
+    const sha = existing ? existing.sha : undefined;
+    const result = await ghPutFile(path, currentDiagram.code, sha);
+    currentDiagram.ghPath = path;
+    currentDiagram.ghSha = result.content.sha;
+    await dbPut(currentDiagram);
+    showSnackbar('Pushed to GitHub ✓');
+  } catch (err) {
+    showSnackbar(`Sync failed: ${err.message}`);
+    console.error(err);
+  }
+});
+
+$('btn-pull-all').addEventListener('click', async () => {
+  if (!settings.ghToken || !settings.ghRepo) {
+    showSnackbar('Configure GitHub token and repo in Settings first');
+    return;
+  }
+  showSnackbar('Pulling from GitHub...');
+  try {
+    const files = await ghListFiles();
+    if (!files.length) { showSnackbar('No .mmd files found in repo'); return; }
+
+    let imported = 0;
+    const existing = await dbGetAll();
+    const byPath = {};
+    existing.forEach(d => { if (d.ghPath) byPath[d.ghPath] = d; });
+
+    for (const f of files) {
+      const fullPath = f.path;
+      const fileData = await ghGetFile(fullPath);
+      if (!fileData || !fileData.content) continue;
+      const content = decodeURIComponent(escape(atob(fileData.content.replace(/\n/g, ''))));
+      const name = f.name.replace(/\.mmd$/, '');
+
+      if (byPath[fullPath]) {
+        // Update existing local diagram
+        byPath[fullPath].code = content;
+        byPath[fullPath].ghSha = fileData.sha;
+        byPath[fullPath].updatedAt = Date.now();
+        await dbPut(byPath[fullPath]);
+      } else {
+        // Create new local diagram
+        const d = makeDiagram(name, content);
+        d.ghPath = fullPath;
+        d.ghSha = fileData.sha;
+        await dbPut(d);
+      }
+      imported++;
+    }
+
+    showSnackbar(`Pulled ${imported} diagram${imported !== 1 ? 's' : ''} ✓`);
+    renderDiagramList();
+    // Reload current if it was updated
+    if (currentDiagramId) await loadDiagram(currentDiagramId);
+  } catch (err) {
+    showSnackbar(`Pull failed: ${err.message}`);
+    console.error(err);
+  }
+});
+
+// ═══════════════════════════════════════════════
+// Export / Import
+// ═══════════════════════════════════════════════
+$('btn-export').addEventListener('click', (e) => {
+  e.stopPropagation();
+  $('export-dropdown').classList.toggle('open');
+});
+document.addEventListener('click', () => $('export-dropdown').classList.remove('open'));
+
+$('export-svg').addEventListener('click', () => {
+  const svg = mermaidOutput.querySelector('svg');
+  if (!svg) { showSnackbar('No diagram to export'); return; }
+  download(svg.outerHTML, (currentDiagram?.name || 'diagram') + '.svg', 'image/svg+xml');
+  showSnackbar('SVG exported ✓');
+});
+
+$('export-mmd').addEventListener('click', () => {
+  const code = codeEditor.value;
+  if (!code.trim()) { showSnackbar('Nothing to export'); return; }
+  download(code, (currentDiagram?.name || 'diagram') + '.mmd', 'text/plain');
+  showSnackbar('.mmd exported ✓');
+});
+
+$('import-mmd').addEventListener('click', () => $('file-input').click());
+
+$('file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  const name = file.name.replace(/\.(mmd|mermaid|md|txt)$/i, '');
+  await saveCurrent();
+  await createAndLoad(name, text);
+  showSnackbar(`Imported "${name}"`);
+  e.target.value = '';
+});
+
+function download(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════════
+// AI Generation
+// ═══════════════════════════════════════════════
+const SYS = `You are a mermaid.js diagram expert. Generate ONLY valid mermaid.js diagram code. No explanation, no markdown fences, no commentary — raw mermaid code only. If existing code is provided with a modification request, output the full modified code.`;
+
+async function callAI(prompt, existing) {
+  let userContent = prompt;
+  if (existing.trim()) userContent = `Existing diagram:\n\`\`\`\n${existing}\n\`\`\`\n\nRequest: ${prompt}`;
+
+  if (settings.provider === 'anthropic') {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': settings.apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: settings.model || 'claude-sonnet-4-20250514', max_tokens: 4096, system: SYS, messages: [{ role: 'user', content: userContent }] }),
+    });
+    if (!res.ok) throw new Error(`API ${res.status}`);
+    const d = await res.json(); return d.content[0].text;
+  }
+  // OpenAI / OpenRouter
+  const base = settings.provider === 'openai' ? 'https://api.openai.com' : 'https://openrouter.ai/api';
+  const model = settings.model || (settings.provider === 'openai' ? 'gpt-4o' : 'anthropic/claude-sonnet-4');
+  const res = await fetch(`${base}/v1/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.apiKey}` },
+    body: JSON.stringify({ model, messages: [{ role: 'system', content: SYS }, { role: 'user', content: userContent }], max_tokens: 4096 }),
+  });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  const d = await res.json(); return d.choices[0].message.content;
+}
+
+async function handleGenerate() {
+  const prompt = promptInput.value.trim();
+  if (!prompt) return;
+  if (!settings.apiKey) { showSnackbar('Configure AI API key in Settings first'); return; }
+  $('btn-send').disabled = true;
+  $('ai-status').classList.add('visible');
+  try {
+    let result = await callAI(prompt, codeEditor.value);
+    result = result.replace(/^```(?:mermaid)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+    codeEditor.value = result;
+    promptInput.value = ''; promptInput.style.height = 'auto';
+    codeEditor.dispatchEvent(new Event('input'));
+    await renderDiagram();
+    showSnackbar('Generated ✓');
+  } catch (err) { showSnackbar(`Error: ${err.message}`); }
+  finally { $('btn-send').disabled = false; $('ai-status').classList.remove('visible'); }
+}
+
+$('btn-send').addEventListener('click', handleGenerate);
+promptInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate(); } });
+promptInput.addEventListener('input', () => { promptInput.style.height = 'auto'; promptInput.style.height = Math.min(promptInput.scrollHeight, 120) + 'px'; });
+
+// ═══════════════════════════════════════════════
+// Tab switching
+// ═══════════════════════════════════════════════
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(`panel-${tab.dataset.panel}`).classList.add('active');
+    if (tab.dataset.panel === 'preview') renderDiagram();
+  });
+});
+
+// ═══════════════════════════════════════════════
+// Settings
+// ═══════════════════════════════════════════════
+$('btn-settings').addEventListener('click', () => { openModal('settings-modal'); loadSettingsUI(); });
+
+function loadSettingsUI() {
+  $('ai-provider').value = settings.provider;
+  updateModelList();
+  $('api-key').value = settings.apiKey;
+  $('gh-token').value = settings.ghToken;
+  $('gh-repo').value = settings.ghRepo;
+  $('gh-path').value = settings.ghPath;
+  $('mermaid-theme').value = settings.theme;
+  $('auto-render').value = settings.autoRender.toString();
+  updateKeyStatus();
+  updateGhStatus();
+}
+
+function updateModelList() {
+  const models = MODELS[$('ai-provider').value] || [];
+  $('ai-model').innerHTML = models.map(m => `<option value="${m.id}" ${m.id === settings.model ? 'selected' : ''}>${m.name}</option>`).join('');
+  if (!settings.model || !models.find(m => m.id === settings.model)) settings.model = models[0]?.id || '';
+}
+
+function updateKeyStatus() {
+  const has = !!$('api-key').value.trim();
+  $('key-status').className = 'key-status' + (has ? ' configured' : '');
+  $('key-status').querySelector('.key-text').textContent = has ? 'Key configured' : 'No key configured';
+}
+
+function updateGhStatus() {
+  const has = !!$('gh-token').value.trim();
+  $('gh-status').className = 'key-status' + (has ? ' configured' : '');
+  $('gh-status').querySelector('.key-text').textContent = has ? 'Token configured' : 'No token configured';
+}
+
+$('ai-provider').addEventListener('change', () => { settings.provider = $('ai-provider').value; settings.model = ''; updateModelList(); });
+$('ai-model').addEventListener('change', () => { settings.model = $('ai-model').value; });
+$('api-key').addEventListener('input', updateKeyStatus);
+$('gh-token').addEventListener('input', updateGhStatus);
+
+function saveSettingsFromUI() {
+  settings.provider = $('ai-provider').value;
+  settings.model = $('ai-model').value;
+  settings.apiKey = $('api-key').value.trim();
+  settings.ghToken = $('gh-token').value.trim();
+  settings.ghRepo = $('gh-repo').value.trim();
+  settings.ghPath = $('gh-path').value.trim();
+  settings.theme = $('mermaid-theme').value;
+  settings.autoRender = $('auto-render').value === 'true';
+  for (const [k, v] of Object.entries(settings)) localStorage.setItem('mf_' + k, v);
+  initMermaid();
+  renderDiagram();
+}
+
+// ═══════════════════════════════════════════════
+// Modal helpers
+// ═══════════════════════════════════════════════
+function openModal(id) { $(id).classList.add('open'); }
+function closeModal(id) {
+  $(id).classList.remove('open');
+  if (id === 'settings-modal') saveSettingsFromUI();
+}
+
+document.querySelectorAll('.modal-close').forEach(btn => {
+  btn.addEventListener('click', () => closeModal(btn.dataset.close));
+});
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', (e) => { if (e.target === el) closeModal(el.id); });
+});
+
+// ═══════════════════════════════════════════════
+// Utilities
+// ═══════════════════════════════════════════════
+let snackbarTimeout;
+function showSnackbar(msg) {
+  const el = $('snackbar'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(snackbarTimeout); snackbarTimeout = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function timeAgo(ts) {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  return Math.floor(s / 86400) + 'd ago';
+}
+
+// ═══════════════════════════════════════════════
+// Bootstrap
+// ═══════════════════════════════════════════════
+async function boot() {
+  // Load mermaid
+  try { await loadMermaidScript(); initMermaid(); } catch (e) {
+    previewError.textContent = 'Could not load mermaid.js. Download this file and open it in your browser.';
+    previewError.style.display = 'block';
+  }
+
+  // Load or create initial diagram
+  if (currentDiagramId) {
+    const ok = await loadDiagram(currentDiagramId);
+    if (!ok) await createAndLoad('Untitled', DEFAULT_CODE);
+  } else {
+    // Check if there are any existing diagrams
+    const all = await dbGetAll();
+    if (all.length) await loadDiagram(all[0].id);
+    else await createAndLoad('Untitled', DEFAULT_CODE);
+  }
+}
+
+boot();
+</script>
+</body>
+</html>
