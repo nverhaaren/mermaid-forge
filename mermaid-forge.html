@@ -6,6 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.anthropic.com https://api.openai.com https://openrouter.ai https://api.github.com; img-src 'self' data: blob:; frame-src 'none'; object-src 'none';">
 <title>Mermaid Forge</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -14,12 +15,15 @@ window.mermaidReady = false;
 function loadMermaidScript() {
   return new Promise((resolve, reject) => {
     if (window.mermaid) { resolve(); return; }
+    const SRI = 'sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb';
     const s = document.createElement('script');
     s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.4.1/mermaid.min.js';
+    s.integrity = SRI; s.crossOrigin = 'anonymous';
     s.onload = resolve;
     s.onerror = () => {
       const s2 = document.createElement('script');
-      s2.src = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
+      s2.src = 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js';
+      s2.integrity = SRI; s2.crossOrigin = 'anonymous';
       s2.onload = resolve;
       s2.onerror = reject;
       document.head.appendChild(s2);
@@ -312,6 +316,21 @@ html, body {
 }
 .snackbar.show { transform: translateX(-50%) translateY(0); }
 
+/* ─── Trust banner ─── */
+#trust-banner {
+  display: none; padding: 10px 16px; margin: 8px 12px 0;
+  background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25);
+  border-radius: 10px; color: var(--warning);
+  font-family: 'DM Sans', sans-serif; font-size: 13px;
+  align-items: center; gap: 10px;
+}
+#trust-banner.show { display: flex; }
+#trust-banner button {
+  margin-left: auto; padding: 5px 12px; border-radius: 8px; border: 1px solid var(--warning);
+  background: transparent; color: var(--warning); font-family: 'DM Sans', sans-serif;
+  font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+}
+
 /* ─── Desktop ─── */
 @media (min-width: 768px) {
   .tab-bar { display: none; }
@@ -379,6 +398,10 @@ html, body {
       </div>
     </div>
     <div class="panel" id="panel-preview">
+      <div id="trust-banner">
+        <span>Untrusted diagram — HTML labels and click handlers disabled.</span>
+        <button id="btn-trust">Trust this diagram</button>
+      </div>
       <div id="preview-container">
         <div class="mermaid-output" id="mermaid-output"></div>
       </div>
@@ -470,6 +493,19 @@ html, body {
           <li>Click <strong>Generate token</strong> and paste it above</li>
         </ol>
         This grants the absolute minimum: read/write files in one specific repo. No access to other repos, issues, PRs, settings, or anything else.
+      </div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-label">Security</div>
+      <div class="settings-field">
+        <label for="persist-keys">Keep keys after tab closes</label>
+        <select id="persist-keys">
+          <option value="false">No (cleared on tab close)</option>
+          <option value="true">Yes (store in localStorage)</option>
+        </select>
+      </div>
+      <div class="settings-note">
+        ⚠ API keys and tokens are stored unencrypted in your browser. By default they are cleared when this tab is closed. Avoid enabling persistent storage on shared or public devices.
       </div>
     </div>
     <div class="settings-section">
@@ -621,15 +657,17 @@ async function ghListFiles() {
 // ═══════════════════════════════════════════════
 // App State
 // ═══════════════════════════════════════════════
+const _persistKeys = localStorage.getItem('mf_persistKeys') === 'true';
 const settings = {
   provider: localStorage.getItem('mf_provider') || 'anthropic',
   model: localStorage.getItem('mf_model') || '',
-  apiKey: localStorage.getItem('mf_apiKey') || '',
+  apiKey: sessionStorage.getItem('mf_apiKey') || (_persistKeys ? localStorage.getItem('mf_apiKey') || '' : ''),
   theme: localStorage.getItem('mf_theme') || 'default',
   autoRender: localStorage.getItem('mf_autoRender') !== 'false',
-  ghToken: localStorage.getItem('mf_ghToken') || '',
+  ghToken: sessionStorage.getItem('mf_ghToken') || (_persistKeys ? localStorage.getItem('mf_ghToken') || '' : ''),
   ghRepo: localStorage.getItem('mf_ghRepo') || '',
   ghPath: localStorage.getItem('mf_ghPath') || '',
+  persistKeys: _persistKeys,
 };
 
 let currentDiagramId = localStorage.getItem('mf_currentId') || null;
@@ -678,8 +716,12 @@ let renderTimeout, renderCounter = 0;
 
 function initMermaid() {
   if (!window.mermaid) return;
-  mermaid.initialize({ startOnLoad: false, theme: settings.theme, securityLevel: 'loose', fontFamily: 'DM Sans, sans-serif' });
+  mermaid.initialize({ startOnLoad: false, theme: settings.theme, securityLevel: 'strict', fontFamily: 'DM Sans, sans-serif' });
   window.mermaidReady = true;
+}
+
+function updateTrustBanner() {
+  $('trust-banner').classList.toggle('show', currentDiagram?.trusted === false);
 }
 
 async function renderDiagram() {
@@ -690,6 +732,11 @@ async function renderDiagram() {
   }
   const code = codeEditor.value.trim();
   if (!code) { mermaidOutput.innerHTML = ''; previewError.style.display = 'none'; return; }
+  mermaid.initialize({
+    startOnLoad: false, theme: settings.theme,
+    securityLevel: currentDiagram?.trusted === false ? 'strict' : 'antiscript',
+    fontFamily: 'DM Sans, sans-serif'
+  });
   try {
     renderCounter++;
     const { svg } = await mermaid.render(`m-${renderCounter}`, code);
@@ -715,7 +762,7 @@ function newId() { return Date.now().toString(36) + Math.random().toString(36).s
 
 function makeDiagram(name, code) {
   const now = Date.now();
-  return { id: newId(), name: name || 'Untitled', code: code || DEFAULT_CODE, createdAt: now, updatedAt: now, ghPath: null, ghSha: null };
+  return { id: newId(), name: name || 'Untitled', code: code || DEFAULT_CODE, createdAt: now, updatedAt: now, ghPath: null, ghSha: null, trusted: true };
 }
 
 async function loadDiagram(id) {
@@ -726,6 +773,7 @@ async function loadDiagram(id) {
   localStorage.setItem('mf_currentId', d.id);
   codeEditor.value = d.code;
   diagramNameInput.value = d.name;
+  updateTrustBanner();
   scheduleRender();
   return true;
 }
@@ -821,6 +869,14 @@ async function renderDiagramList() {
   });
 }
 
+$('btn-trust').addEventListener('click', async () => {
+  if (!currentDiagram) return;
+  currentDiagram.trusted = true;
+  await dbPut(currentDiagram);
+  updateTrustBanner();
+  renderDiagram();
+});
+
 $('btn-diagrams').addEventListener('click', async () => {
   await saveCurrent();
   openModal('diagrams-modal');
@@ -889,12 +945,14 @@ $('btn-pull-all').addEventListener('click', async () => {
         byPath[fullPath].code = content;
         byPath[fullPath].ghSha = fileData.sha;
         byPath[fullPath].updatedAt = Date.now();
+        byPath[fullPath].trusted = false;
         await dbPut(byPath[fullPath]);
       } else {
         // Create new local diagram
         const d = makeDiagram(name, content);
         d.ghPath = fullPath;
         d.ghSha = fileData.sha;
+        d.trusted = false;
         await dbPut(d);
       }
       imported++;
@@ -1033,13 +1091,14 @@ function loadSettingsUI() {
   $('gh-path').value = settings.ghPath;
   $('mermaid-theme').value = settings.theme;
   $('auto-render').value = settings.autoRender.toString();
+  $('persist-keys').value = settings.persistKeys.toString();
   updateKeyStatus();
   updateGhStatus();
 }
 
 function updateModelList() {
   const models = MODELS[$('ai-provider').value] || [];
-  $('ai-model').innerHTML = models.map(m => `<option value="${m.id}" ${m.id === settings.model ? 'selected' : ''}>${m.name}</option>`).join('');
+  $('ai-model').innerHTML = models.map(m => `<option value="${esc(m.id)}" ${m.id === settings.model ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
   if (!settings.model || !models.find(m => m.id === settings.model)) settings.model = models[0]?.id || '';
 }
 
@@ -1069,7 +1128,25 @@ function saveSettingsFromUI() {
   settings.ghPath = $('gh-path').value.trim();
   settings.theme = $('mermaid-theme').value;
   settings.autoRender = $('auto-render').value === 'true';
-  for (const [k, v] of Object.entries(settings)) localStorage.setItem('mf_' + k, v);
+  settings.persistKeys = $('persist-keys').value === 'true';
+  // Non-sensitive settings → localStorage
+  localStorage.setItem('mf_provider', settings.provider);
+  localStorage.setItem('mf_model', settings.model);
+  localStorage.setItem('mf_theme', settings.theme);
+  localStorage.setItem('mf_autoRender', settings.autoRender);
+  localStorage.setItem('mf_ghRepo', settings.ghRepo);
+  localStorage.setItem('mf_ghPath', settings.ghPath);
+  localStorage.setItem('mf_persistKeys', settings.persistKeys);
+  // Sensitive keys → always sessionStorage; localStorage only if persist enabled
+  sessionStorage.setItem('mf_apiKey', settings.apiKey);
+  sessionStorage.setItem('mf_ghToken', settings.ghToken);
+  if (settings.persistKeys) {
+    localStorage.setItem('mf_apiKey', settings.apiKey);
+    localStorage.setItem('mf_ghToken', settings.ghToken);
+  } else {
+    localStorage.removeItem('mf_apiKey');
+    localStorage.removeItem('mf_ghToken');
+  }
   initMermaid();
   renderDiagram();
 }
