@@ -1195,7 +1195,6 @@ async function boot() {
     previewError.textContent = 'Could not load mermaid.js. Download this file and open it in your browser.';
     previewError.style.display = 'block';
   }
-
   // Load or create initial diagram
   if (currentDiagramId) {
     const ok = await loadDiagram(currentDiagramId);
@@ -1210,7 +1209,7 @@ async function boot() {
 
 boot();
 </script>
-<script src="node_modules/eruda/eruda.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
 <script>eruda.init();</script>
 </body>
 </html>
