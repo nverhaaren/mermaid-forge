@@ -163,6 +163,40 @@ html, body {
   font-size: 13px; color: var(--text-secondary);
 }
 .ai-status.visible { display: flex; }
+
+/* ─── Chat panel ─── */
+.chat-panel-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 3px 10px; background: var(--bg-secondary); border-top: 1px solid var(--border);
+  cursor: pointer; user-select: none; flex-shrink: 0;
+}
+.chat-panel-bar:hover { background: var(--bg-tertiary); }
+.chat-label { font-size: 12px; color: var(--text-muted); }
+.chat-bar-actions { display: flex; align-items: center; gap: 4px; }
+.chat-bar-btn {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  padding: 2px 6px; border-radius: 4px; font-size: 12px; line-height: 1.6;
+}
+.chat-bar-btn:hover { color: var(--text-primary); background: var(--bg-primary); }
+.chat-panel {
+  overflow-y: auto; max-height: 0; transition: max-height 0.25s ease; flex-shrink: 0;
+}
+.chat-panel.open { max-height: 280px; }
+.chat-messages { padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; }
+.chat-msg {
+  max-width: 85%; padding: 8px 12px; border-radius: 12px;
+  font-size: 13px; line-height: 1.45; word-break: break-word;
+}
+.chat-msg.user {
+  align-self: flex-end; background: var(--accent); color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.chat-msg.assistant {
+  align-self: flex-start; background: var(--bg-secondary); color: var(--text-primary);
+  border-bottom-left-radius: 4px; border: 1px solid var(--border);
+}
+.chat-msg.code-update { color: var(--text-secondary); font-style: italic; font-size: 12px; }
+
 .spinner {
   width: 16px; height: 16px; border: 2px solid var(--border);
   border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite;
@@ -377,9 +411,19 @@ html, body {
       <div id="editor-area">
         <textarea id="code-editor" spellcheck="false" placeholder="Type mermaid syntax here..."></textarea>
       </div>
+      <div class="chat-panel-bar" id="chat-panel-bar">
+        <span class="chat-label" id="chat-label">Chat</span>
+        <div class="chat-bar-actions">
+          <button class="chat-bar-btn" id="btn-clear-chat" title="Clear conversation">Clear</button>
+          <button class="chat-bar-btn" id="btn-toggle-chat">▲</button>
+        </div>
+      </div>
+      <div id="chat-panel" class="chat-panel">
+        <div id="chat-messages" class="chat-messages"></div>
+      </div>
       <div class="ai-status" id="ai-status">
         <div class="spinner"></div>
-        <span id="ai-status-text">Generating...</span>
+        <span id="ai-status-text">Thinking...</span>
       </div>
       <div class="prompt-bar">
         <div class="prompt-input-wrap">
@@ -755,7 +799,7 @@ function newId() { return Date.now().toString(36) + Math.random().toString(36).s
 
 function makeDiagram(name, code) {
   const now = Date.now();
-  return { id: newId(), name: name || 'Untitled', code: code || DEFAULT_CODE, createdAt: now, updatedAt: now, ghPath: null, ghSha: null, trusted: true };
+  return { id: newId(), name: name || 'Untitled', code: code || DEFAULT_CODE, createdAt: now, updatedAt: now, ghPath: null, ghSha: null, trusted: true, messages: [] };
 }
 
 async function loadDiagram(id) {
@@ -766,6 +810,9 @@ async function loadDiagram(id) {
   localStorage.setItem('mf_currentId', d.id);
   codeEditor.value = d.code;
   diagramNameInput.value = d.name;
+  chatMessages = d.messages || [];
+  renderChatPanel();
+  setChatOpen(false);
   updateTrustBanner();
   scheduleRender();
   return true;
@@ -776,6 +823,7 @@ async function saveCurrent() {
   currentDiagram.code = codeEditor.value;
   currentDiagram.name = diagramNameInput.value.trim() || 'Untitled';
   currentDiagram.updatedAt = Date.now();
+  currentDiagram.messages = chatMessages;
   await dbPut(currentDiagram);
 }
 
@@ -1008,47 +1056,92 @@ function download(content, filename, mime) {
 // ═══════════════════════════════════════════════
 // AI Generation
 // ═══════════════════════════════════════════════
-const SYS = `You are a mermaid.js diagram expert. Generate ONLY valid mermaid.js diagram code. No explanation, no markdown fences, no commentary — raw mermaid code only. If existing code is provided with a modification request, output the full modified code.`;
+let chatMessages = []; // {role, content, isCode?}
 
-async function callAI(prompt, existing) {
-  let userContent = prompt;
-  if (existing.trim()) userContent = `Existing diagram:\n\`\`\`\n${existing}\n\`\`\`\n\nRequest: ${prompt}`;
+function buildSysPrompt() {
+  const code = codeEditor.value.trim();
+  const ctx = code ? `\n\nCurrent diagram:\n\`\`\`\n${code}\n\`\`\`` : '';
+  return `You are a mermaid.js diagram expert assistant.
 
+If the user wants to CREATE or MODIFY a diagram, respond with ONLY the complete valid mermaid.js code — no explanation, no markdown fences, no commentary.
+
+If the user asks a QUESTION, wants to DISCUSS, or asks for an EXPLANATION, respond in plain text only — no code.${ctx}`;
+}
+
+function looksLikeMermaidCode(text) {
+  return /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|gitGraph|journey|mindmap|timeline|xychart-beta|block|quadrantChart|requirementDiagram|c4Context|zenuml)\b/i.test(text.trim());
+}
+
+async function callAI(messages) {
+  const sys = buildSysPrompt();
   if (settings.provider === 'anthropic') {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': settings.apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: settings.model || 'claude-sonnet-4-20250514', max_tokens: 4096, system: SYS, messages: [{ role: 'user', content: userContent }] }),
+      body: JSON.stringify({ model: settings.model || 'claude-sonnet-4-20250514', max_tokens: 4096, system: sys, messages }),
     });
     if (!res.ok) throw new Error(`API ${res.status}`);
     const d = await res.json(); return d.content[0].text;
   }
-  // OpenAI / OpenRouter
   const base = settings.provider === 'openai' ? 'https://api.openai.com' : 'https://openrouter.ai/api';
   const model = settings.model || (settings.provider === 'openai' ? 'gpt-4o' : 'anthropic/claude-sonnet-4');
   const res = await fetch(`${base}/v1/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.apiKey}` },
-    body: JSON.stringify({ model, messages: [{ role: 'system', content: SYS }, { role: 'user', content: userContent }], max_tokens: 4096 }),
+    body: JSON.stringify({ model, messages: [{ role: 'system', content: sys }, ...messages], max_tokens: 4096 }),
   });
   if (!res.ok) throw new Error(`API ${res.status}`);
   const d = await res.json(); return d.choices[0].message.content;
+}
+
+function renderChatPanel() {
+  const container = $('chat-messages');
+  container.innerHTML = '';
+  chatMessages.forEach(m => {
+    const div = document.createElement('div');
+    div.className = `chat-msg ${m.role}${m.isCode ? ' code-update' : ''}`;
+    div.textContent = m.isCode ? '⟳ Diagram updated' : m.content;
+    container.appendChild(div);
+  });
+  container.scrollTop = container.scrollHeight;
+  $('chat-label').textContent = chatMessages.length ? `Chat (${chatMessages.length})` : 'Chat';
+}
+
+function setChatOpen(open) {
+  $('chat-panel').classList.toggle('open', open);
+  $('btn-toggle-chat').textContent = open ? '▼' : '▲';
 }
 
 async function handleGenerate() {
   const prompt = promptInput.value.trim();
   if (!prompt) return;
   if (!settings.apiKey) { showSnackbar('Configure AI API key in Settings first'); return; }
+
+  chatMessages.push({ role: 'user', content: prompt });
+  renderChatPanel();
+  setChatOpen(true);
+  promptInput.value = ''; promptInput.style.height = 'auto';
+
   $('btn-send').disabled = true;
   $('ai-status').classList.add('visible');
   try {
-    let result = await callAI(prompt, codeEditor.value);
-    result = result.replace(/^```(?:mermaid)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
-    codeEditor.value = result;
-    promptInput.value = ''; promptInput.style.height = 'auto';
-    codeEditor.dispatchEvent(new Event('input'));
-    await renderDiagram();
-    showSnackbar('Generated ✓');
+    const apiMessages = chatMessages.map(({ role, content }) => ({ role, content }));
+    let raw = await callAI(apiMessages);
+    const cleaned = raw.replace(/^```(?:mermaid)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+    const isCode = looksLikeMermaidCode(cleaned);
+
+    chatMessages.push({ role: 'assistant', content: cleaned, isCode });
+    renderChatPanel();
+
+    if (isCode) {
+      codeEditor.value = cleaned;
+      codeEditor.dispatchEvent(new Event('input'));
+      await renderDiagram();
+    }
+    if (currentDiagram) {
+      currentDiagram.messages = chatMessages;
+      await saveCurrent();
+    }
   } catch (err) { showSnackbar(`Error: ${err.message}`); }
   finally { $('btn-send').disabled = false; $('ai-status').classList.remove('visible'); }
 }
@@ -1056,6 +1149,15 @@ async function handleGenerate() {
 $('btn-send').addEventListener('click', handleGenerate);
 promptInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate(); } });
 promptInput.addEventListener('input', () => { promptInput.style.height = 'auto'; promptInput.style.height = Math.min(promptInput.scrollHeight, 120) + 'px'; });
+
+$('chat-panel-bar').addEventListener('click', () => setChatOpen(!$('chat-panel').classList.contains('open')));
+$('btn-clear-chat').addEventListener('click', (e) => {
+  e.stopPropagation();
+  chatMessages = [];
+  renderChatPanel();
+  setChatOpen(false);
+  if (currentDiagram) { currentDiagram.messages = []; saveCurrent(); }
+});
 
 // ═══════════════════════════════════════════════
 // Tab switching
